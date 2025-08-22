@@ -9,6 +9,8 @@ on:
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: .
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,15 +24,26 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
 
       - name: Install deps
         run: pip install -r requirements.txt
 
+      - name: Sanity check path
+        run: |
+          pwd
+          ls -la
+          python - <<'PY'
+          import sys, os
+          print("CWD:", os.getcwd())
+          print("sys.path[0]:", sys.path[0])
+          print("Has app?:", os.path.isdir("app"))
+          PY
+
       - name: Lint (ruff)
-        run: ruff check .
+        run: ruff check app tests
 
       - name: Tests
-        run: pytest -q
+        run: pytest -q tests
