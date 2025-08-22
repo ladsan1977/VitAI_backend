@@ -10,7 +10,7 @@ jobs:
   lint-and-test:
     runs-on: ubuntu-latest
     env:
-      PYTHONPATH: .
+      PYTHONPATH: ${{ github.workspace }}/VitAI_backend
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,17 +30,6 @@ jobs:
 
       - name: Install deps
         run: pip install -r requirements.txt
-
-      - name: Sanity check path
-        run: |
-          pwd
-          ls -la
-          python - <<'PY'
-          import sys, os
-          print("CWD:", os.getcwd())
-          print("sys.path[0]:", sys.path[0])
-          print("Has app?:", os.path.isdir("app"))
-          PY
 
       - name: Lint (ruff)
         run: ruff check app tests
