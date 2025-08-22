@@ -34,4 +34,6 @@ jobs:
 
       - name: Tests
         working-directory: ${{ github.workspace }}
+        env:
+          PYTHONPATH: ${{ github.workspace }}
         run: pytest -q tests
