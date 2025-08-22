@@ -9,8 +9,6 @@ on:
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
-    env:
-      PYTHONPATH: ${{ github.workspace }}/VitAI_backend
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,4 +33,5 @@ jobs:
         run: ruff check app tests
 
       - name: Tests
+        working-directory: ${{ github.workspace }}/VitAI_backend
         run: pytest -q tests
