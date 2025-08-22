@@ -33,5 +33,5 @@ jobs:
         run: ruff check app tests
 
       - name: Tests
-        working-directory: ${{ github.workspace }}/VitAI_backend
+        working-directory: ${{ github.workspace }}
         run: pytest -q tests
