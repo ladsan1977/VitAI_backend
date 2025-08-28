@@ -27,7 +27,7 @@ Backend API service for VitAI - AI-powered nutritional analysis application that
 - **Authentication**: JWT with refresh tokens
 - **API Documentation**: OpenAPI/Swagger
 - **Testing**: pytest
-- **Linting & Formatting**: Ruff, Black, isort
+- **Linting & Formatting**: Ruff (replaces Black, isort, Flake8)
 - **Containerization**: Docker + Docker Compose
 - **Deployment**: Railway (planned)
 
