@@ -205,6 +205,31 @@ uv run pytest tests/test_health.py
 uv sync --group dev
 ```
 
+### Pre-commit Hooks
+
+We use pre-commit hooks to ensure code quality before commits:
+
+```bash
+# Install pre-commit hooks (one-time setup)
+uv run pre-commit install
+
+# Run pre-commit on all files manually
+uv run pre-commit run --all-files
+
+# Run pre-commit on staged files
+uv run pre-commit run
+```
+
+**What pre-commit does automatically:**
+
+- ✅ **Code formatting** with Ruff
+- ✅ **Linting** with automatic fixes
+- ✅ **Test execution** to ensure functionality
+- ✅ **File cleanup** (trailing whitespace, end-of-file fixes)
+- ✅ **YAML validation**
+
+**Note**: Pre-commit hooks will automatically run on every `git commit` and block the commit if any checks fail.
+
 ## 📦 UV Commands Reference
 
 ```bash
@@ -235,6 +260,65 @@ uv tree
 # Lock dependencies (creates/updates uv.lock)
 uv lock
 ```
+
+## 🛠️ Make Commands
+
+We provide convenient Make commands for common development tasks:
+
+### Development Setup
+
+```bash
+# Install dependencies
+make install
+
+# Install development dependencies
+make dev
+```
+
+### Code Quality & Testing
+
+```bash
+# Quick check (lint + basic tests)
+make check
+
+# Complete verification (lint + all tests)
+make check-all
+
+# Lint code (without fixing)
+make lint
+
+# Format code automatically
+make format
+
+# Run tests
+make test
+
+# Run tests with coverage
+make test-cov
+```
+
+### Development Server
+
+```bash
+# Run development server with auto-reload
+make run
+```
+
+### Maintenance
+
+```bash
+# Clean cache files and temporary directories
+make clean
+```
+
+### Pre-commit Workflow
+
+```bash
+# Before committing, run this to ensure code quality
+make check-all
+```
+
+**💡 Tip**: Use `make check` during development and `make check-all` before commits for optimal workflow.
 
 ## 📦 Project Structure
 
