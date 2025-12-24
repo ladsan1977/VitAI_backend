@@ -1,4 +1,32 @@
+# Python
 .venv
 __pycache__
 *.pyc
+*.pyo
+*.pyd
+.Python
+
+# Environment variables
 .env
+.env.local
+
+# Docker
+.dockerignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Database
+*.db
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
