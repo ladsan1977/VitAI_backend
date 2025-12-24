@@ -6,7 +6,7 @@ Backend API service for VitAI - AI-powered nutritional analysis application that
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Nuxt 3 PWA   │◄──►│  FastAPI BE     │◄──►│  GPT-4o Mini    │
+│   Nuxt 3 PWA   │◄──►│  FastAPI BE     │◄──►│  GPT-5.1 Chat   │
 │   (Frontend)    │    │  (This Repo)    │    │  Multimodal     │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
                                 │
@@ -23,7 +23,7 @@ Backend API service for VitAI - AI-powered nutritional analysis application that
 - **Package Manager**: UV (ultra-fast Python package installer)
 - **Database**: PostgreSQL 15+ with SQLAlchemy 2.0+
 - **Cache**: Redis 7+
-- **AI Integration**: OpenAI GPT-4o Mini (Multimodal)
+- **AI Integration**: OpenAI GPT-5.1 Chat (Responses API, Multimodal)
 - **Authentication**: JWT with refresh tokens
 - **API Documentation**: OpenAPI/Swagger
 - **Testing**: pytest
@@ -80,6 +80,20 @@ pip install uv
    ```bash
    cp .env.example .env
    # Edit .env with your configuration
+   ```
+
+   **Important:** Generate a secure API key for authentication:
+
+   ```bash
+   # Generate a secure API key
+   python -c "import secrets; print(f'vitai_sk_prod_{secrets.token_urlsafe(32)}')"
+   ```
+
+   Copy the generated key and add it to your `.env` file:
+
+   ```env
+   API_KEY=vitai_sk_prod_<your_generated_key>
+   OPEN_AI_KEY=your_openai_api_key
    ```
 
 4. **Run the application locally**
@@ -149,45 +163,134 @@ docker run -p 8000:8000 --env-file .env vitai-backend
 docker run -p 8000:8000 -v $(pwd)/app:/app/app vitai-backend
 ```
 
+## 🔐 API Authentication
+
+### API Key Authentication
+
+All AI analysis endpoints require API key authentication for security and rate limiting.
+
+#### Setting Up Authentication
+
+1. **Generate an API Key:**
+   ```bash
+   python -c "import secrets; print(f'vitai_sk_prod_{secrets.token_urlsafe(32)}')"
+   ```
+
+2. **Add to Environment:**
+   ```env
+   API_KEY=vitai_sk_prod_your_generated_key_here
+   ```
+
+3. **Using the API Key:**
+
+   **With cURL:**
+   ```bash
+   curl -X POST "http://localhost:8000/api/v1/ai/analyze" \
+     -H "X-API-Key: vitai_sk_prod_your_key_here" \
+     -F "images=@product.jpg" \
+     -F "analysis_type=complete"
+   ```
+
+   **With Postman:**
+   - Method: `POST`
+   - URL: `http://localhost:8000/api/v1/ai/analyze`
+   - Headers tab:
+     - Key: `X-API-Key`
+     - Value: `vitai_sk_prod_your_key_here`
+   - Body tab: `form-data`
+     - Add your images and parameters
+
+   **With Python:**
+   ```python
+   import requests
+
+   headers = {
+       "X-API-Key": "vitai_sk_prod_your_key_here"
+   }
+
+   files = {
+       "images": open("product.jpg", "rb")
+   }
+
+   data = {
+       "analysis_type": "complete"
+   }
+
+   response = requests.post(
+       "http://localhost:8000/api/v1/ai/analyze",
+       headers=headers,
+       files=files,
+       data=data
+   )
+
+   print(response.json())
+   ```
+
+   **With JavaScript/Fetch:**
+   ```javascript
+   const formData = new FormData();
+   formData.append('images', fileInput.files[0]);
+   formData.append('analysis_type', 'complete');
+
+   const response = await fetch('http://localhost:8000/api/v1/ai/analyze', {
+     method: 'POST',
+     headers: {
+       'X-API-Key': 'vitai_sk_prod_your_key_here'
+     },
+     body: formData
+   });
+
+   const data = await response.json();
+   ```
+
+### Rate Limiting
+
+API endpoints are rate-limited to prevent abuse:
+
+- **20 requests per minute** per API key
+- **100 requests per hour** per API key
+
+Rate limit exceeded responses:
+```json
+{
+  "detail": "Rate limit exceeded. Please try again later.",
+  "error": "too_many_requests"
+}
+```
+
+Configure limits in `.env`:
+```env
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_PER_MINUTE=20
+RATE_LIMIT_PER_HOUR=100
+```
+
+### Authentication Errors
+
+**Missing API Key (403):**
+```json
+{
+  "detail": "API key is missing. Please provide an API key in the X-API-Key header."
+}
+```
+
+**Invalid API Key (403):**
+```json
+{
+  "detail": "Invalid API key. Please check your credentials."
+}
+```
+
 ## 📊 API Endpoints
 
 ### Core Endpoints
 
-- `GET /health` - Health check
-- `POST /api/v1/auth/login` - User authentication
-- `POST /api/v1/auth/register` - User registration
-- `POST /api/v1/analysis/nutrition` - Nutritional analysis
-- `GET /api/v1/analysis/history` - Analysis history
+- `GET /health` - Health check (no auth required)
+- `GET /api/v1/ai/health` - AI service health check (no auth required)
 
-### AI Analysis
+### AI Analysis (Authentication Required)
 
-- `POST /api/v1/ai/extract` - Extract nutrition info from images
-- `POST /api/v1/ai/analyze` - Analyze nutrition for health conditions
-- `POST /api/v1/ai/recommend` - Get personalized recommendations
-
-## 🔧 Configuration
-
-### Environment Variables
-
-```bash
-# Database
-DATABASE_URL=postgresql://user:password@localhost:5432/vitai
-REDIS_URL=redis://localhost:6379
-
-# OpenAI
-OPENAI_API_KEY=your-api-key
-OPENAI_MODEL=gpt-4o-mini
-
-# JWT
-JWT_SECRET_KEY=your-secret-key
-JWT_ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-
-# App
-APP_NAME=VitAI Backend
-DEBUG=true
-ENVIRONMENT=development
-```
+- `POST /api/v1/ai/analyze` - Analyze nutrition from product images (**requires API key**)
 
 ## 🧪 Testing
 
@@ -358,11 +461,13 @@ vitai-backend/
 
 ## 🔒 Security Features
 
-- JWT-based authentication with refresh tokens
-- Rate limiting on API endpoints
-- Input validation and sanitization
-- CORS configuration for frontend integration
-- Environment-based configuration management
+- **API Key Authentication** - Secure header-based authentication
+- **Rate Limiting** - 20 requests/minute, 100 requests/hour per API key
+- **Input Validation** - Comprehensive request data validation and sanitization
+- **CORS Configuration** - Configured for secure frontend integration
+- **Environment-based Configuration** - Secrets managed via environment variables
+- **Secure Key Generation** - Cryptographically secure API key generation
+- **Future JWT Support** - Architecture ready for user-based authentication
 
 ## 📈 Monitoring & Observability
 

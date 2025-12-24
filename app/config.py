@@ -1,3 +1,4 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -6,10 +7,36 @@ class Settings(BaseSettings):
     version: str = "0.1.0"
     app_env: str = "dev"
     log_level: str = "INFO"
-    cors_origins: list[str] = ["http://localhost:5173"]
+    cors_origins: list[str] = ["http://localhost:5173", "http://localhost:8080", "http://127.0.0.1:8080"]
     database_url: str = "postgresql://postgres:postgres@localhost:5432/vitai"
     port: int = 8000
 
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="", case_sensitive=False, env_file_encoding="utf-8")
+    # OpenAI Configuration
+    openai_api_key: str = Field(default="", alias="OPEN_AI_KEY")
+    openai_model: str = "gpt-5.1-chat-latest"
+    openai_max_output_tokens: int = 4000
+    openai_temperature: float = 0.1
+
+    # File Upload Configuration
+    max_file_size: int = 10 * 1024 * 1024  # 10MB
+    allowed_image_types: list[str] = ["image/jpeg", "image/png", "image/webp"]
+
+    # Security Configuration
+    api_key: str = Field(default="", alias="API_KEY")
+    api_key_header: str = "X-API-Key"
+
+    # Rate Limiting Configuration
+    rate_limit_enabled: bool = Field(default=True, alias="RATE_LIMIT_ENABLED")
+    rate_limit_per_minute: int = Field(default=20, alias="RATE_LIMIT_PER_MINUTE")
+    rate_limit_per_hour: int = Field(default=160, alias="RATE_LIMIT_PER_HOUR")
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_prefix="",
+        case_sensitive=False,
+        env_file_encoding="utf-8",
+        extra="ignore",  # Ignore extra environment variables
+    )
+
 
 settings = Settings()
