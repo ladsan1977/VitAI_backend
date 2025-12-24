@@ -30,6 +30,25 @@ def mask_api_key(key: str) -> str:
     return f"{key[:8]}****{key[-4:]}"
 
 
+def validate_api_key_format(api_key: str) -> bool:
+    """
+    Validate API key follows the expected format.
+
+    Args:
+        api_key: The API key to validate
+
+    Returns:
+        bool: True if format is valid, False otherwise
+    """
+    if not api_key:
+        return False
+    if not api_key.startswith("vitai_sk_prod_"):
+        return False
+    if len(api_key) < 30:  # Minimum length check
+        return False
+    return True
+
+
 async def verify_api_key(api_key: Annotated[str | None, Depends(api_key_header)] = None) -> str:
     """
     Verify the API key from the request header.
@@ -54,12 +73,20 @@ async def verify_api_key(api_key: Annotated[str | None, Depends(api_key_header)]
 
     logger.debug(f"API key received: {mask_api_key(api_key)}")
 
+    # Validate API key format first (prevents brute force attacks)
+    if not validate_api_key_format(api_key):
+        logger.warning(f"Invalid API key format: {mask_api_key(api_key)}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid API key format.",
+        )
+
     # Log configured API key status
     configured_key_status = "set" if settings.api_key else "empty/not configured"
     configured_key_masked = mask_api_key(settings.api_key) if settings.api_key else "****"
     logger.debug(f"Configured API_KEY status: {configured_key_status} ({configured_key_masked})")
 
-    # Validate the API key against the configured key
+    # Validate the API key against the configured key (timing-safe comparison)
     if not secrets.compare_digest(api_key, settings.api_key):
         logger.warning("API key validation failed - provided key does not match configured API_KEY")
         raise HTTPException(

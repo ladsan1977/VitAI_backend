@@ -14,19 +14,25 @@ Backend API service for VitAI - AI-powered nutritional analysis application that
                        ┌─────────────────┐
                        │   PostgreSQL    │
                        │   + Redis       │
+                       │  (Phase 2)      │
                        └─────────────────┘
 ```
+
+**Current:** Stateless API - only calls OpenAI (no database required for deployment)
+**Phase 2:** Will add PostgreSQL for data persistence and Redis for distributed caching
 
 ## Tech Stack
 
 - **Framework**: FastAPI (Python 3.11+)
 - **Package Manager**: UV
-- **Database**: PostgreSQL 15+ with SQLAlchemy 2.0+
-- **Cache**: Redis 7+
-- **AI Integration**: OpenAI GPT-5.1 Chat
-- **Authentication**: API Key + JWT
-- **Testing**: pytest
+- **AI Integration**: OpenAI GPT-5.1 Chat (Multimodal)
+- **Authentication**: API Key (X-API-Key header)
+- **Rate Limiting**: slowapi (in-memory)
+- **Testing**: pytest with coverage
 - **Linting**: Ruff
+- **Deployment**: Render (free tier), Docker-ready
+- **Database**: PostgreSQL 15+ (optional - not currently used)
+- **Cache**: Redis 7+ (optional - not currently used)
 
 ## Quick Start
 
@@ -128,12 +134,32 @@ uv run pytest --cov=app
 
 ## Deployment
 
-### Railway
-1. Connect GitHub repository to Railway
-2. Set environment variables
-3. Deploy automatically on push to main
+### Render (Recommended - FREE Tier)
 
-### Docker
+**Quick Deploy:**
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com)
+
+1. Create account at [render.com](https://render.com) (free)
+2. New Web Service → Connect repository
+3. Select **Docker** runtime, **Free** tier
+4. Set environment variables:
+   - `OPEN_AI_KEY` - Your OpenAI API key
+   - `API_KEY` - Generate: `python -c "import secrets; print(f'vitai_sk_prod_{secrets.token_urlsafe(32)}')"`
+   - `CORS_ORIGINS` - `["https://your-frontend.com"]`
+5. Deploy!
+
+**Features:**
+- ✅ $0/month (free tier - 750 hours/month)
+- ✅ Auto HTTPS/SSL
+- ✅ GitHub auto-deploy
+- ✅ No database setup needed
+- ⚠️ Sleeps after 15min inactivity (15-30s cold start)
+
+For detailed deployment guide, see **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
+
+### Docker (Alternative)
+
 ```bash
 docker build -t vitai-backend .
 docker run -p 8000:8000 --env-file .env vitai-backend
@@ -141,11 +167,15 @@ docker run -p 8000:8000 --env-file .env vitai-backend
 
 ## Security Features
 
-- API Key Authentication
-- Rate Limiting (20/min, 100/hour per key)
-- Input Validation
-- CORS Configuration
-- Environment-based Secrets
+- **API Key Authentication** - X-API-Key header with format validation
+- **Rate Limiting** - 10/min, 100/hour per key (production), 20/min dev
+- **HTTPS Enforcement** - Automatic redirect in production
+- **Security Headers** - HSTS, X-Frame-Options, X-XSS-Protection, nosniff
+- **CORS Protection** - Explicit origin whitelist (no wildcards)
+- **Input Validation** - File type/size limits, content verification
+- **Trusted Hosts** - Protection against host header attacks
+- **Environment Secrets** - Secure configuration management
+- **Timing-Safe Comparison** - API key validation resistant to timing attacks
 
 ## Project Structure
 

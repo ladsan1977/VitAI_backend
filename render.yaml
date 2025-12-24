@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: vitai-backend
+    env: docker
+    region: oregon  # Choose: oregon, frankfurt, singapore
+    plan: free  # Free tier with 750 hours/month
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: HTTPS_ONLY
+        value: true
+      - key: ALLOWED_HOSTS
+        value: '["*.onrender.com"]'
+      - key: RATE_LIMIT_PER_MINUTE
+        value: "10"
+      - key: RATE_LIMIT_PER_HOUR
+        value: "100"
+      # Secrets - Set these manually in Render dashboard
+      - key: OPEN_AI_KEY
+        sync: false  # Must be set in Render dashboard
+      - key: API_KEY
+        sync: false  # Must be set in Render dashboard
+      - key: CORS_ORIGINS
+        sync: false  # Must be set in Render dashboard with frontend domain
