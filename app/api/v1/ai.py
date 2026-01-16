@@ -18,6 +18,7 @@ from ...core.security import verify_api_key
 from ...models.ai import AIAnalysisResponse
 from ...services.image_service import ImageService
 from ...services.openai_service import OpenAIService
+from ...services.redis_service import redis_service
 from ...utils.validators import validate_analysis_request_data, validate_multiple_images
 
 router = APIRouter(prefix="/ai", tags=["AI Analysis"])
@@ -158,4 +159,21 @@ async def ai_health_check():
         "model": settings.openai_model,
         "api": "responses",
         "features": ["nutrition_extraction", "ingredient_analysis", "health_scoring"],
+    }
+
+
+@router.get(
+    "/cache/stats",
+    summary="Cache statistics",
+    description="Get cache statistics and status (requires API key)",
+    dependencies=[Depends(verify_api_key)],
+)
+async def cache_stats():
+    """Get cache statistics and health status."""
+    stats = await redis_service.get_cache_stats()
+    health = await redis_service.health_check()
+
+    return {
+        "cache": stats,
+        "health": health,
     }

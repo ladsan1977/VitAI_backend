@@ -1,5 +1,6 @@
 """OpenAI service for AI-powered nutritional analysis."""
 
+import asyncio
 import json
 import logging
 import uuid
@@ -21,6 +22,7 @@ from ..models.ai import (
     ProfileCalification,
     Recommendations,
 )
+from .redis_service import redis_service
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +50,22 @@ class OpenAIService:
         analysis_id = str(uuid.uuid4())
 
         try:
+            # Check cache first
+            cached_response = await redis_service.get_cached_response(
+                images=images,
+                analysis_type=analysis_type,
+                user_profile=user_profile,
+                dietary_preferences=dietary_preferences,
+                health_conditions=health_conditions,
+            )
+
+            if cached_response:
+                # Update metadata for cached response
+                cached_response.analysis_id = analysis_id
+                cached_response.processing_time = (datetime.now(UTC) - start_time).total_seconds()
+                logger.info(f"Returning cached response for analysis_id: {analysis_id}")
+                return cached_response
+
             # Build prompt
             prompt = self._build_analysis_prompt(analysis_type, user_profile, dietary_preferences, health_conditions)
 
@@ -60,6 +78,18 @@ class OpenAIService:
             # Parse and validate
             analysis_response = self._parse_openai_response(
                 response_data, analysis_id, len(images), start_time, token_usage
+            )
+
+            # Cache the response asynchronously (fire and forget)
+            asyncio.create_task(
+                redis_service.cache_response(
+                    response=analysis_response,
+                    images=images,
+                    analysis_type=analysis_type,
+                    user_profile=user_profile,
+                    dietary_preferences=dietary_preferences,
+                    health_conditions=health_conditions,
+                )
             )
 
             return analysis_response
@@ -211,7 +241,7 @@ class OpenAIService:
                 model=settings.openai_model,
                 input=input_messages,
                 max_output_tokens=settings.openai_max_output_tokens,
-                text={"format": {"type": "text"}},
+                text={"format": {"type": "json_object"}},
             )
 
             content = response.output_text
