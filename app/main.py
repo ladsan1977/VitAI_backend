@@ -9,6 +9,7 @@ from slowapi.errors import RateLimitExceeded
 from .api.v1.ai import router as ai_router
 from .config import settings
 from .core.rate_limit import limiter
+from .services.redis_service import redis_service
 
 # Configure logging
 logging.basicConfig(
@@ -99,24 +100,39 @@ app.include_router(ai_router, prefix="/api/v1")
 
 
 @app.get("/health")
-def health():
+async def health():
     """Health check endpoint for monitoring and Render."""
-    return {"status": "ok", "env": settings.app_env, "version": settings.version}
+    redis_health = await redis_service.health_check()
+    return {
+        "status": "ok",
+        "env": settings.app_env,
+        "version": settings.version,
+        "services": {
+            "redis": redis_health,
+        },
+    }
 
 
 # Startup event
 @app.on_event("startup")
 async def startup_event():
-    """Log application startup information."""
+    """Log application startup information and initialize services."""
     logger.info(f"Starting VitAI Backend v{settings.version}")
     logger.info(f"Environment: {settings.app_env}")
     logger.info(f"CORS Origins: {settings.cors_origins}")
     logger.info(f"HTTPS Only: {settings.https_only}")
     logger.info(f"Rate Limiting: {settings.rate_limit_enabled}")
 
+    # Initialize Redis connection
+    redis_connected = await redis_service.connect()
+    logger.info(f"Redis Cache: {'enabled' if redis_connected else 'disabled/unavailable'}")
+
 
 # Shutdown event
 @app.on_event("shutdown")
 async def shutdown_event():
-    """Log application shutdown."""
+    """Log application shutdown and cleanup resources."""
     logger.info("Shutting down VitAI Backend")
+
+    # Close Redis connection
+    await redis_service.disconnect()
