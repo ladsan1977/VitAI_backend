@@ -25,7 +25,7 @@ def test_ai_health_check(client):
     assert data["model"] == "gpt-5.1-chat-latest"
 
 
-def test_analyze_nutrition_success(client, mock_openai_service):
+def test_analyze_nutrition_success(client, mock_controller):
     """Test successful nutrition analysis."""
     # Create test image
     test_image = create_test_image()
@@ -67,7 +67,7 @@ def test_analyze_nutrition_invalid_image(client):
     assert response.status_code == 400
 
 
-def test_analyze_nutrition_multiple_images(client, mock_openai_service):
+def test_analyze_nutrition_multiple_images(client, mock_controller):
     """Test analysis with multiple images."""
     # Create multiple test images
     test_image1 = create_test_image()
@@ -81,7 +81,7 @@ def test_analyze_nutrition_multiple_images(client, mock_openai_service):
     data = {"analysis_type": "complete"}
 
     # Update mock to return 2 images processed
-    mock_openai_service.return_value.images_processed = 2
+    mock_controller.return_value.images_processed = 2
 
     response = client.post("/api/v1/ai/analyze", files=files, data=data)
 
@@ -90,7 +90,7 @@ def test_analyze_nutrition_multiple_images(client, mock_openai_service):
     assert result["images_processed"] == 2
 
 
-def test_analyze_nutrition_with_user_profile(client, mock_openai_service):
+def test_analyze_nutrition_with_user_profile(client, mock_controller):
     """Test analysis with user profile JSON."""
     test_image = create_test_image()
 
@@ -123,7 +123,7 @@ def test_analyze_nutrition_invalid_json_profile(client):
 
 
 @pytest.mark.parametrize("analysis_type", ["nutrition", "ingredients", "complete"])
-def test_different_analysis_types(client, mock_openai_service, analysis_type):
+def test_different_analysis_types(client, mock_controller, analysis_type):
     """Test different analysis types."""
     test_image = create_test_image()
 

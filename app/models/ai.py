@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from .base import BaseResponse
 
@@ -95,30 +95,33 @@ class AIAnalysisRequest(BaseModel):
 
 
 class ProductInfo(BaseModel):
-    nombre: str | None = None
-    marca: str | None = None
-    tamano_porcion: str | None = None
-    porciones_por_envase: str | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+    name: str | None = Field(default=None, alias="nombre")
+    brand: str | None = Field(default=None, alias="marca")
+    serving_size: str | None = Field(default=None, alias="tamano_porcion")
+    servings_per_container: str | None = Field(default=None, alias="porciones_por_envase")
 
 
 class PortionInfo(BaseModel):
-    calorias: float | None = None
-    grasas_totales: float | None = None
-    grasas_saturadas: float | None = None
-    grasas_trans: float | None = None
-    carbohidratos_totales: float | None = None
-    fibra: float | None = None
-    azucares_totales: float | None = None
-    azucares_anadidos: float | None = None
-    proteina: float | None = None
-    sodio: float | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+    calories: float | None = Field(default=None, alias="calorias")
+    total_fat: float | None = Field(default=None, alias="grasas_totales")
+    saturated_fat: float | None = Field(default=None, alias="grasas_saturadas")
+    trans_fat: float | None = Field(default=None, alias="grasas_trans")
+    total_carbohydrates: float | None = Field(default=None, alias="carbohidratos_totales")
+    fiber: float | None = Field(default=None, alias="fibra")
+    total_sugars: float | None = Field(default=None, alias="azucares_totales")
+    added_sugars: float | None = Field(default=None, alias="azucares_anadidos")
+    protein: float | None = Field(default=None, alias="proteina")
+    sodium: float | None = Field(default=None, alias="sodio")
 
     def __init__(self, **data):
         # Convert string values to floats during initialization
         for key, value in data.items():
-            if isinstance(value, str) and key != "calorias":  # calorias is already float
+            if isinstance(value, str) and key != "calories" and key != "calorias":
                 try:
-                    # Remove common units and clean the string
                     cleaned = value.strip().lower()
                     for unit in ["g", "mg", "kcal", "kj"]:
                         cleaned = cleaned.replace(unit, "")
@@ -126,7 +129,7 @@ class PortionInfo(BaseModel):
                     data[key] = float(cleaned) if cleaned else None
                 except (ValueError, AttributeError):
                     data[key] = None
-            elif key == "calorias" and isinstance(value, str):
+            elif key in ("calories", "calorias") and isinstance(value, str):
                 try:
                     data[key] = float(value.strip()) if value.strip() else None
                 except (ValueError, AttributeError):
@@ -134,135 +137,185 @@ class PortionInfo(BaseModel):
         super().__init__(**data)
 
 
-class AditivosIdentificados(BaseModel):
+class IdentifiedAdditives(BaseModel):
     """Identified additives categorized by type."""
 
-    endulcorantes: list[str] = []
-    colorantes: list[str] = []
-    conservantes: list[str] = []
-    saborizantes: list[str] = []
+    model_config = ConfigDict(populate_by_name=True)
+
+    sweeteners: list[str] = Field(default=[], alias="endulcorantes")
+    colorants: list[str] = Field(default=[], alias="colorantes")
+    preservatives: list[str] = Field(default=[], alias="conservantes")
+    flavorings: list[str] = Field(default=[], alias="saborizantes")
 
 
-class ClasificacionProducto(BaseModel):
+# Keep old name as alias for imports
+AditivosIdentificados = IdentifiedAdditives
+
+
+class ProductClassification(BaseModel):
     """Product classification based on processing level and risk."""
 
-    nivel_procesamiento: str  # NOVA 1-4
-    categoria_alimento: str | None = None
-    categoria_riesgo: str  # Alto/moderado/bajo riesgo
+    model_config = ConfigDict(populate_by_name=True)
+
+    processing_level: str = Field(alias="nivel_procesamiento")  # NOVA 1-4
+    food_category: str | None = Field(default=None, alias="categoria_alimento")
+    risk_category: str = Field(alias="categoria_riesgo")
 
 
-class DesgloseCalculo(BaseModel):
+# Keep old name as alias for imports
+ClasificacionProducto = ProductClassification
+
+
+class ScoreBreakdown(BaseModel):
     """Detailed breakdown of the general score calculation."""
 
-    puntos_base: int = 10
-    procesamiento_NOVA4: int | None = None
-    procesamiento_NOVA3: int | None = None
-    azucares_anadidos_alto: int | None = None
-    azucares_anadidos_moderado: int | None = None
-    colorantes_artificiales: int | None = None
-    endulcorantes_artificiales: int | None = None
-    sodio_alto: int | None = None
-    sodio_moderado: int | None = None
-    grasas_saturadas_alto: int | None = None
-    grasas_trans: int | None = None
-    baja_densidad_nutricional: int | None = None
-    alta_densidad_nutricional: int | None = None
-    fibra_alta: int | None = None
-    proteina_alta: int | None = None
-    componentes_beneficiosos: int | None = None
-    grasas_saludables: int | None = None
-    conservantes_controvertidos: int | None = None
-    saborizantes_artificiales: int | None = None
-    multiples_aditivos: int | None = None
-    vitaminas_minerales: int | None = None
-    ajuste_multiples_excesos: str | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+    base_points: int = Field(default=10, alias="puntos_base")
+    nova4_processing: int | None = Field(default=None, alias="procesamiento_NOVA4")
+    nova3_processing: int | None = Field(default=None, alias="procesamiento_NOVA3")
+    high_added_sugars: int | None = Field(default=None, alias="azucares_anadidos_alto")
+    moderate_added_sugars: int | None = Field(default=None, alias="azucares_anadidos_moderado")
+    artificial_colorants: int | None = Field(default=None, alias="colorantes_artificiales")
+    artificial_sweeteners: int | None = Field(default=None, alias="endulcorantes_artificiales")
+    high_sodium: int | None = Field(default=None, alias="sodio_alto")
+    moderate_sodium: int | None = Field(default=None, alias="sodio_moderado")
+    high_saturated_fat: int | None = Field(default=None, alias="grasas_saturadas_alto")
+    trans_fat: int | None = Field(default=None, alias="grasas_trans")
+    low_nutrient_density: int | None = Field(default=None, alias="baja_densidad_nutricional")
+    high_nutrient_density: int | None = Field(default=None, alias="alta_densidad_nutricional")
+    high_fiber: int | None = Field(default=None, alias="fibra_alta")
+    high_protein: int | None = Field(default=None, alias="proteina_alta")
+    beneficial_components: int | None = Field(default=None, alias="componentes_beneficiosos")
+    healthy_fats: int | None = Field(default=None, alias="grasas_saludables")
+    controversial_preservatives: int | None = Field(default=None, alias="conservantes_controvertidos")
+    artificial_flavorings: int | None = Field(default=None, alias="saborizantes_artificiales")
+    multiple_additives: int | None = Field(default=None, alias="multiples_aditivos")
+    vitamins_minerals: int | None = Field(default=None, alias="vitaminas_minerales")
+    multiple_excess_adjustment: str | None = Field(default=None, alias="ajuste_multiples_excesos")
+
+
+# Keep old name as alias for imports
+DesgloseCalculo = ScoreBreakdown
 
 
 class NutritionalEvaluation(BaseModel):
-    fortalezas: list[str] = []
-    debilidades: list[str] = []
-    advertencias: list[str] = []
-    comparacion_referencia: str | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+    strengths: list[str] = Field(default=[], alias="fortalezas")
+    weaknesses: list[str] = Field(default=[], alias="debilidades")
+    warnings: list[str] = Field(default=[], alias="advertencias")
+    reference_comparison: str | None = Field(default=None, alias="comparacion_referencia")
 
 
 class Calification(BaseModel):
     """Simple qualification with score and justification."""
 
-    puntuacion: float
-    justificacion: str
+    model_config = ConfigDict(populate_by_name=True)
+
+    score: float = Field(alias="puntuacion")
+    justification: str = Field(alias="justificacion")
 
     def __init__(self, **data):
-        # Convert puntuacion to float if it's a string
         if "puntuacion" in data and isinstance(data["puntuacion"], str):
             try:
                 data["puntuacion"] = float(data["puntuacion"].strip())
             except (ValueError, AttributeError):
                 data["puntuacion"] = 0.0
+        if "score" in data and isinstance(data["score"], str):
+            try:
+                data["score"] = float(data["score"].strip())
+            except (ValueError, AttributeError):
+                data["score"] = 0.0
         super().__init__(**data)
 
 
-class CalificacionGeneral(BaseModel):
-    """General qualification with detailed scoring breakdown."""
+class GeneralRating(BaseModel):
+    """General rating with detailed scoring breakdown."""
 
-    puntuacion: float
-    desglose_calculo: DesgloseCalculo | None = None
-    categoria_producto: str | None = None
-    nivel_procesamiento: str | None = None
-    categoria_riesgo: str | None = None
-    justificacion: str
+    model_config = ConfigDict(populate_by_name=True)
+
+    score: float = Field(alias="puntuacion")
+    score_breakdown: ScoreBreakdown | None = Field(default=None, alias="desglose_calculo")
+    product_category: str | None = Field(default=None, alias="categoria_producto")
+    processing_level: str | None = Field(default=None, alias="nivel_procesamiento")
+    risk_category: str | None = Field(default=None, alias="categoria_riesgo")
+    justification: str = Field(alias="justificacion")
 
     def __init__(self, **data):
-        # Convert puntuacion to float if it's a string
         if "puntuacion" in data and isinstance(data["puntuacion"], str):
             try:
                 data["puntuacion"] = float(data["puntuacion"].strip())
             except (ValueError, AttributeError):
                 data["puntuacion"] = 0.0
+        if "score" in data and isinstance(data["score"], str):
+            try:
+                data["score"] = float(data["score"].strip())
+            except (ValueError, AttributeError):
+                data["score"] = 0.0
         super().__init__(**data)
 
 
-class ProfileCalification(BaseModel):
-    """Detailed qualification for a specific health profile."""
+# Keep old name as alias for imports
+CalificacionGeneral = GeneralRating
 
-    puntuacion: float
-    frecuencia_recomendada: str | None = None
-    tamano_porcion_sugerido: str | None = None
-    justificacion: str
+
+class ProfileRating(BaseModel):
+    """Detailed rating for a specific health profile."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    score: float = Field(alias="puntuacion")
+    recommended_frequency: str | None = Field(default=None, alias="frecuencia_recomendada")
+    suggested_serving_size: str | None = Field(default=None, alias="tamano_porcion_sugerido")
+    justification: str = Field(alias="justificacion")
 
     def __init__(self, **data):
-        # Convert puntuacion to float if it's a string
         if "puntuacion" in data and isinstance(data["puntuacion"], str):
             try:
                 data["puntuacion"] = float(data["puntuacion"].strip())
             except (ValueError, AttributeError):
                 data["puntuacion"] = 0.0
+        if "score" in data and isinstance(data["score"], str):
+            try:
+                data["score"] = float(data["score"].strip())
+            except (ValueError, AttributeError):
+                data["score"] = 0.0
         super().__init__(**data)
+
+
+# Keep old name as alias for imports
+ProfileCalification = ProfileRating
 
 
 class Recommendations(BaseModel):
-    consumo_general: str | None = None
-    frecuencia_optima: str | None = None
-    alternativas_sugeridas: list[str] = []
+    model_config = ConfigDict(populate_by_name=True)
+
+    general_consumption: str | None = Field(default=None, alias="consumo_general")
+    optimal_frequency: str | None = Field(default=None, alias="frecuencia_optima")
+    suggested_alternatives: list[str] = Field(default=[], alias="alternativas_sugeridas")
 
 
 class AIAnalysisResponse(BaseResponse):
     """Response model for AI analysis endpoint."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     analysis_id: str = Field(..., description="Unique identifier for this analysis")
 
     # Extracted information
-    producto: ProductInfo | None = None
-    ingredientes: list[str] = []
-    alergenos_identificados: list[str] = []
-    aditivos_identificados: AditivosIdentificados | None = None
-    informacion_nutricional: dict[str, PortionInfo] | None = None  # por_porcion
-    clasificacion_producto: ClasificacionProducto | None = None
-    calificacion_general: CalificacionGeneral | None = None
-    calificaciones: dict[str, ProfileCalification] = {}
-    evaluacion_nutricional: NutritionalEvaluation | None = None
-    recomendaciones: Recommendations | None = None
+    product: ProductInfo | None = Field(default=None, alias="producto")
+    ingredients: list[str] = Field(default=[], alias="ingredientes")
+    identified_allergens: list[str] = Field(default=[], alias="alergenos_identificados")
+    identified_additives: IdentifiedAdditives | None = Field(default=None, alias="aditivos_identificados")
+    nutritional_information: dict[str, PortionInfo] | None = Field(default=None, alias="informacion_nutricional")
+    product_classification: ProductClassification | None = Field(default=None, alias="clasificacion_producto")
+    general_rating: GeneralRating | None = Field(default=None, alias="calificacion_general")
+    profile_ratings: dict[str, ProfileRating] = Field(default={}, alias="calificaciones")
+    nutritional_evaluation: NutritionalEvaluation | None = Field(default=None, alias="evaluacion_nutricional")
+    recommendations: Recommendations | None = Field(default=None, alias="recomendaciones")
 
-    resumen_ejecutivo: str | None = None
+    executive_summary: str | None = Field(default=None, alias="resumen_ejecutivo")
 
     # Metadata
     images_processed: int = Field(..., description="Number of images processed")

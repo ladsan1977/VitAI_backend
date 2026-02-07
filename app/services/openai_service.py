@@ -11,16 +11,16 @@ from typing import Any
 from ..config import settings
 from ..core.exceptions import AnalysisValidationError, OpenAIServiceError
 from ..models.ai import (
-    AditivosIdentificados,
     AIAnalysisResponse,
-    CalificacionGeneral,
-    ClasificacionProducto,
-    DesgloseCalculo,
+    GeneralRating,
+    IdentifiedAdditives,
     NutritionalEvaluation,
     PortionInfo,
+    ProductClassification,
     ProductInfo,
-    ProfileCalification,
+    ProfileRating,
     Recommendations,
+    ScoreBreakdown,
 )
 from .redis_service import redis_service
 
@@ -44,6 +44,8 @@ class OpenAIService:
         user_profile: dict[str, Any] | None = None,
         dietary_preferences: list[str] | None = None,
         health_conditions: list[str] | None = None,
+        prompt_content: str | None = None,
+        content_language: str = "es",
     ) -> AIAnalysisResponse:
         """Analyze nutrition information from product images."""
         start_time = datetime.now(UTC)
@@ -67,7 +69,9 @@ class OpenAIService:
                 return cached_response
 
             # Build prompt
-            prompt = self._build_analysis_prompt(analysis_type, user_profile, dietary_preferences, health_conditions)
+            prompt = self._build_analysis_prompt(
+                analysis_type, user_profile, dietary_preferences, health_conditions, prompt_content, content_language
+            )
 
             # Prepare images
             image_messages = self._prepare_image_messages(images)
@@ -113,43 +117,56 @@ class OpenAIService:
         user_profile: dict[str, Any] | None = None,
         dietary_preferences: list[str] | None = None,
         health_conditions: list[str] | None = None,
+        prompt_content: str | None = None,
+        content_language: str = "es",
     ) -> str:
-        """Build the analysis prompt for OpenAI using external markdown file."""
+        """Build the analysis prompt for OpenAI using DB content or fallback file."""
         try:
-            # Ruta del prompt
-            prompt_path = Path(__file__).parent / "prompts" / "prompt_produccion_nutricional_v2.md"
-
-            # Cargar el contenido si no está en cache
-            if self.prompt_cache is None:
-                if not prompt_path.exists():
-                    raise FileNotFoundError(f"Prompt file not found at: {prompt_path}")
-                self.prompt_cache = prompt_path.read_text(encoding="utf-8")
-
-            base_prompt = self.prompt_cache
-
-            # Foco del análisis
-            if analysis_type == "nutrition":
-                focus_section = (
-                    "⚙️ Foco del análisis: Prioriza la extracción de datos nutricionales y valores por porción."
-                )
-            elif analysis_type == "ingredients":
-                focus_section = "⚙️ Foco del análisis: Prioriza lista de ingredientes, alérgenos y aditivos."
+            if prompt_content is not None:
+                # Use prompt from database
+                base_prompt = prompt_content
+                logger.debug("Using prompt loaded from database")
             else:
-                focus_section = "⚙️ Foco del análisis: Proporciona un análisis completo: nutrición, ingredientes y evaluación integral de salud."
+                # Fallback: load from local markdown file (legacy Spanish prompt)
+                logger.warning("No DB prompt provided, falling back to local file (may contain Spanish JSON keys)")
+                prompt_path = Path(__file__).parent / "prompts" / "prompt_produccion_nutricional_v2.md"
 
-            # Personalización del análisis
+                if self.prompt_cache is None:
+                    if not prompt_path.exists():
+                        raise FileNotFoundError(f"Prompt file not found at: {prompt_path}")
+                    self.prompt_cache = prompt_path.read_text(encoding="utf-8")
+
+                base_prompt = self.prompt_cache
+
+            # Analysis focus
+            if analysis_type == "nutrition":
+                focus_section = "Analysis focus: Prioritize extraction of nutritional data and per-serving values."
+            elif analysis_type == "ingredients":
+                focus_section = "Analysis focus: Prioritize ingredient list, allergens, and additives."
+            else:
+                focus_section = "Analysis focus: Provide a complete analysis: nutrition, ingredients, and comprehensive health evaluation."
+
+            # Personalization
             personalization = ""
             if dietary_preferences or health_conditions or user_profile:
-                personalization += "\n\n## 📌 Personalización del análisis\n"
+                personalization += "\n\n## Personalization\n"
                 if dietary_preferences:
-                    personalization += f"- Preferencias dietéticas: {', '.join(dietary_preferences)}\n"
+                    personalization += f"- Dietary preferences: {', '.join(dietary_preferences)}\n"
                 if health_conditions:
-                    personalization += f"- Condiciones de salud a considerar: {', '.join(health_conditions)}\n"
+                    personalization += f"- Health conditions to consider: {', '.join(health_conditions)}\n"
                 if user_profile:
-                    personalization += f"- Perfil del usuario: {json.dumps(user_profile, ensure_ascii=False)}\n"
+                    personalization += f"- User profile: {json.dumps(user_profile, ensure_ascii=False)}\n"
 
-            # Prompt final ensamblado
-            full_prompt = f"{base_prompt}\n\n{focus_section}\n{personalization}"
+            # Content language instruction
+            lang_names = {"es": "Spanish", "en": "English"}
+            lang_name = lang_names.get(content_language, content_language)
+            language_instruction = (
+                f"\n\nIMPORTANT: Write ALL text content (justifications, summaries, "
+                f"recommendations, warnings, strengths, weaknesses) in {lang_name}."
+            )
+
+            # Assemble final prompt
+            full_prompt = f"{base_prompt}\n\n{focus_section}\n{personalization}{language_instruction}"
 
             return full_prompt.strip()
 
@@ -224,11 +241,11 @@ class OpenAIService:
                         {
                             "type": "input_text",
                             "text": (
-                                "Eres un analista nutricional experto. "
-                                "Debes seguir exactamente los pasos y reglas del prompt. "
-                                "No ignores ninguna condición de coherencia entre puntuaciones. "
-                                "Si la calificación_general es menor que 5, ninguna puntuación individual puede ser mayor que 7. "
-                                "Devuelve únicamente un JSON válido, sin texto adicional ni explicación fuera del JSON."
+                                "You are an expert nutritional analyst. "
+                                "You must follow exactly the steps and rules in the prompt. "
+                                "Do not ignore any scoring coherence conditions. "
+                                "If the general_rating score is less than 5, no individual profile score can be greater than 7. "
+                                "Return ONLY valid JSON, with no additional text or explanation outside the JSON."
                             ),
                         }
                     ],
@@ -292,7 +309,7 @@ class OpenAIService:
             raise OpenAIServiceError(f"OpenAI API call failed: {str(e)}") from e
 
     # -------------------------------------------------------------------------
-    # Parseo de respuesta
+    # Response parsing
     # -------------------------------------------------------------------------
     def _parse_openai_response(
         self,
@@ -306,147 +323,145 @@ class OpenAIService:
         try:
             logger.info(f"Starting to parse OpenAI response for analysis_id: {analysis_id}")
             logger.debug(f"Response data keys: {list(response_data.keys())}")
+
             processing_time = (datetime.now(UTC) - start_time).total_seconds()
 
-            # ---------- Producto ----------
-            logger.debug("Parsing producto...")
-            producto = (
+            # ---------- Product ----------
+            logger.debug("Parsing product...")
+            product = (
                 ProductInfo(
-                    nombre=response_data.get("producto", {}).get("nombre"),
-                    marca=response_data.get("producto", {}).get("marca"),
-                    tamano_porcion=response_data.get("producto", {}).get("tamano_porcion"),
-                    porciones_por_envase=response_data.get("producto", {}).get("porciones_por_envase"),
+                    name=response_data.get("product", {}).get("name"),
+                    brand=response_data.get("product", {}).get("brand"),
+                    serving_size=response_data.get("product", {}).get("serving_size"),
+                    servings_per_container=response_data.get("product", {}).get("servings_per_container"),
                 )
-                if "producto" in response_data
+                if "product" in response_data
                 else None
             )
-            logger.debug(f"Producto parsed: {producto is not None}")
+            logger.debug(f"Product parsed: {product is not None}")
 
-            # ---------- Ingredientes ----------
-            logger.debug("Parsing ingredientes...")
-            ingredientes = response_data.get("ingredientes", [])
-            logger.debug(f"Ingredientes count: {len(ingredientes)}")
+            # ---------- Ingredients ----------
+            logger.debug("Parsing ingredients...")
+            ingredients = response_data.get("ingredients", [])
+            logger.debug(f"Ingredients count: {len(ingredients)}")
 
-            # ---------- Alergenos identificados ----------
-            alergenos_identificados = response_data.get("alergenos_identificados", [])
+            # ---------- Identified allergens ----------
+            identified_allergens = response_data.get("identified_allergens", [])
 
-            # ---------- Aditivos identificados ----------
-            aditivos_identificados = None
-            if "aditivos_identificados" in response_data:
-                adit_data = response_data["aditivos_identificados"]
-                aditivos_identificados = AditivosIdentificados(
-                    endulcorantes=adit_data.get("endulcorantes", []),
-                    colorantes=adit_data.get("colorantes", []),
-                    conservantes=adit_data.get("conservantes", []),
-                    saborizantes=adit_data.get("saborizantes", []),
+            # ---------- Identified additives ----------
+            identified_additives = None
+            if "identified_additives" in response_data:
+                adit_data = response_data["identified_additives"]
+                identified_additives = IdentifiedAdditives(
+                    sweeteners=adit_data.get("sweeteners", []),
+                    colorants=adit_data.get("colorants", []),
+                    preservatives=adit_data.get("preservatives", []),
+                    flavorings=adit_data.get("flavorings", []),
                 )
 
-            # ---------- Información nutricional ----------
-            informacion_nutricional = None
-            if "informacion_nutricional" in response_data:
-                porcion_data = response_data["informacion_nutricional"].get("por_porcion", {})
-                informacion_nutricional = {"por_porcion": PortionInfo(**porcion_data)}
+            # ---------- Nutritional information ----------
+            nutritional_information = None
+            if "nutritional_information" in response_data:
+                serving_data = response_data["nutritional_information"].get("per_serving", {})
+                nutritional_information = {"per_serving": PortionInfo(**serving_data)}
 
-            # ---------- Clasificacion producto ----------
-            clasificacion_producto = None
-            if "clasificacion_producto" in response_data:
-                clasif_data = response_data["clasificacion_producto"]
-                clasificacion_producto = ClasificacionProducto(
-                    nivel_procesamiento=clasif_data.get("nivel_procesamiento", ""),
-                    categoria_alimento=clasif_data.get("categoria_alimento"),
-                    categoria_riesgo=clasif_data.get("categoria_riesgo", ""),
+            # ---------- Product classification ----------
+            product_classification = None
+            if "product_classification" in response_data:
+                clasif_data = response_data["product_classification"]
+                product_classification = ProductClassification(
+                    processing_level=clasif_data.get("processing_level", ""),
+                    food_category=clasif_data.get("food_category"),
+                    risk_category=clasif_data.get("risk_category", ""),
                 )
 
-            # ---------- Evaluación nutricional ----------
-            evaluacion_nutricional = None
-            if "evaluacion_nutricional" in response_data:
-                eval_data = response_data["evaluacion_nutricional"]
-                evaluacion_nutricional = NutritionalEvaluation(
-                    fortalezas=eval_data.get("fortalezas", []),
-                    debilidades=eval_data.get("debilidades", []),
-                    advertencias=eval_data.get("advertencias", []),
-                    comparacion_referencia=eval_data.get("comparacion_referencia"),
+            # ---------- Nutritional evaluation ----------
+            nutritional_evaluation = None
+            if "nutritional_evaluation" in response_data:
+                eval_data = response_data["nutritional_evaluation"]
+                nutritional_evaluation = NutritionalEvaluation(
+                    strengths=eval_data.get("strengths", []),
+                    weaknesses=eval_data.get("weaknesses", []),
+                    warnings=eval_data.get("warnings", []),
+                    reference_comparison=eval_data.get("reference_comparison"),
                 )
 
-            # ---------- Calificaciones individuales ----------
-            logger.debug("Parsing calificaciones...")
-            calificaciones = {}
-            if "calificaciones" in response_data:
-                logger.debug(f"Found calificaciones with profiles: {list(response_data['calificaciones'].keys())}")
-                for perfil, data in response_data["calificaciones"].items():
+            # ---------- Profile ratings ----------
+            logger.debug("Parsing profile_ratings...")
+            profile_ratings = {}
+            if "profile_ratings" in response_data:
+                logger.debug(f"Found profile_ratings with profiles: {list(response_data['profile_ratings'].keys())}")
+                for profile, data in response_data["profile_ratings"].items():
                     try:
-                        logger.debug(f"Parsing profile: {perfil}")
-
-                        calificaciones[perfil] = ProfileCalification(
-                            puntuacion=data.get("puntuacion"),
-                            frecuencia_recomendada=data.get("frecuencia_recomendada"),
-                            tamano_porcion_sugerido=data.get("tamano_porcion_sugerido"),
-                            justificacion=data.get("justificacion", ""),
+                        logger.debug(f"Parsing profile: {profile}")
+                        profile_ratings[profile] = ProfileRating(
+                            score=data.get("score"),
+                            recommended_frequency=data.get("recommended_frequency"),
+                            suggested_serving_size=data.get("suggested_serving_size"),
+                            justification=data.get("justification", ""),
                         )
-                        logger.debug(f"Successfully parsed profile: {perfil}")
+                        logger.debug(f"Successfully parsed profile: {profile}")
                     except Exception as e:
-                        logger.error(f"Error parsing profile {perfil}: {str(e)}", exc_info=True)
+                        logger.error(f"Error parsing profile {profile}: {str(e)}", exc_info=True)
                         continue
-            logger.debug(f"Total calificaciones parsed: {len(calificaciones)}")
+            logger.debug(f"Total profile_ratings parsed: {len(profile_ratings)}")
 
-            # ---------- Calificación general (nuevo campo) ----------
-            logger.debug("Parsing calificacion_general...")
-            calificacion_general = None
-            if "calificacion_general" in response_data:
-                cg_data = response_data["calificacion_general"]
-                logger.debug(f"calificacion_general keys: {list(cg_data.keys())}")
+            # ---------- General rating ----------
+            logger.debug("Parsing general_rating...")
+            general_rating = None
+            if "general_rating" in response_data:
+                gr_data = response_data["general_rating"]
+                logger.debug(f"general_rating keys: {list(gr_data.keys())}")
 
-                # Parse desglose_calculo if present
-                desglose_calculo = None
-                if "desglose_calculo" in cg_data:
-                    logger.debug("Parsing desglose_calculo...")
-                    dc_data = cg_data["desglose_calculo"]
-                    desglose_calculo = DesgloseCalculo(**dc_data)
-                    logger.debug("desglose_calculo parsed successfully")
+                # Parse score_breakdown if present
+                score_breakdown = None
+                if "score_breakdown" in gr_data:
+                    logger.debug("Parsing score_breakdown...")
+                    sb_data = gr_data["score_breakdown"]
+                    score_breakdown = ScoreBreakdown(**sb_data)
+                    logger.debug("score_breakdown parsed successfully")
 
-                calificacion_general = CalificacionGeneral(
-                    puntuacion=cg_data.get("puntuacion"),
-                    desglose_calculo=desglose_calculo,
-                    categoria_producto=cg_data.get("categoria_producto"),
-                    nivel_procesamiento=cg_data.get("nivel_procesamiento"),
-                    categoria_riesgo=cg_data.get("categoria_riesgo"),
-                    justificacion=cg_data.get("justificacion", ""),
+                general_rating = GeneralRating(
+                    score=gr_data.get("score"),
+                    score_breakdown=score_breakdown,
+                    product_category=gr_data.get("product_category"),
+                    processing_level=gr_data.get("processing_level"),
+                    risk_category=gr_data.get("risk_category"),
+                    justification=gr_data.get("justification", ""),
                 )
-                logger.debug("calificacion_general parsed successfully")
+                logger.debug("general_rating parsed successfully")
 
-            # ---------- Recomendaciones ----------
-            recomendaciones = None
-            if "recomendaciones" in response_data:
-                rec_data = response_data["recomendaciones"]
-                recomendaciones = Recommendations(
-                    consumo_general=rec_data.get("consumo_general"),
-                    frecuencia_optima=rec_data.get("frecuencia_optima"),
-                    contraindicado_para=rec_data.get("contraindicado_para", []),
-                    alternativas_sugeridas=rec_data.get("alternativas_sugeridas", []),
-                    como_mejorar_eleccion=rec_data.get("como_mejorar_eleccion", []),
+            # ---------- Recommendations ----------
+            recommendations = None
+            if "recommendations" in response_data:
+                rec_data = response_data["recommendations"]
+                recommendations = Recommendations(
+                    general_consumption=rec_data.get("general_consumption"),
+                    optimal_frequency=rec_data.get("optimal_frequency"),
+                    suggested_alternatives=rec_data.get("suggested_alternatives", []),
                 )
 
-            # ---------- Resumen ejecutivo ----------
-            resumen_ejecutivo = response_data.get("resumen_ejecutivo")
+            # ---------- Executive summary ----------
+            executive_summary = response_data.get("executive_summary")
 
             # ---------- Confidence score ----------
             confidence_score = float(response_data.get("confidence_score", 0.5))
 
-            # ---------- Construcción de respuesta ----------
+            # ---------- Build response ----------
             logger.debug("Constructing AIAnalysisResponse...")
             response = AIAnalysisResponse(
                 analysis_id=analysis_id,
-                producto=producto,
-                ingredientes=ingredientes,
-                alergenos_identificados=alergenos_identificados,
-                aditivos_identificados=aditivos_identificados,
-                informacion_nutricional=informacion_nutricional,
-                clasificacion_producto=clasificacion_producto,
-                calificacion_general=calificacion_general,
-                calificaciones=calificaciones,
-                evaluacion_nutricional=evaluacion_nutricional,
-                recomendaciones=recomendaciones,
-                resumen_ejecutivo=resumen_ejecutivo,
+                product=product,
+                ingredients=ingredients,
+                identified_allergens=identified_allergens,
+                identified_additives=identified_additives,
+                nutritional_information=nutritional_information,
+                product_classification=product_classification,
+                general_rating=general_rating,
+                profile_ratings=profile_ratings,
+                nutritional_evaluation=nutritional_evaluation,
+                recommendations=recommendations,
+                executive_summary=executive_summary,
                 images_processed=images_count,
                 processing_time=processing_time,
                 confidence_score=confidence_score,

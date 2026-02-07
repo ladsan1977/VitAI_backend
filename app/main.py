@@ -6,9 +6,11 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 
-from .api.v1.ai import router as ai_router
+from .api.v1 import ai_router, analytics_router
 from .config import settings
 from .core.rate_limit import limiter
+from .db.session import engine, get_db
+from .middleware import MetricsMiddleware
 from .services.redis_service import redis_service
 
 # Configure logging
@@ -81,6 +83,9 @@ app.add_middleware(
     max_age=3600,  # Cache preflight for 1 hour
 )
 
+# Metrics Middleware (for session tracking and API metrics)
+app.add_middleware(MetricsMiddleware)
+
 
 # Rate limit exception handler
 @app.exception_handler(RateLimitExceeded)
@@ -97,18 +102,33 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONRe
 
 # Include API routers
 app.include_router(ai_router, prefix="/api/v1")
+app.include_router(analytics_router, prefix="/api/v1")
 
 
 @app.get("/health")
 async def health():
     """Health check endpoint for monitoring and Render."""
+    from sqlalchemy import text
+
     redis_health = await redis_service.health_check()
+
+    # Database health check
+    db_health = "unknown"
+    try:
+        async for db in get_db():
+            await db.execute(text("SELECT 1"))
+            db_health = "healthy"
+            break
+    except Exception as e:
+        db_health = f"unhealthy: {str(e)}"
+
     return {
         "status": "ok",
         "env": settings.app_env,
         "version": settings.version,
         "services": {
             "redis": redis_health,
+            "database": db_health,
         },
     }
 
@@ -122,10 +142,23 @@ async def startup_event():
     logger.info(f"CORS Origins: {settings.cors_origins}")
     logger.info(f"HTTPS Only: {settings.https_only}")
     logger.info(f"Rate Limiting: {settings.rate_limit_enabled}")
+    logger.info(f"Analytics: {settings.analytics_enabled}")
 
     # Initialize Redis connection
     redis_connected = await redis_service.connect()
     logger.info(f"Redis Cache: {'enabled' if redis_connected else 'disabled/unavailable'}")
+
+    # Initialize Database connection
+    try:
+        async with engine.begin() as conn:
+            # Test connection
+            from sqlalchemy import text
+
+            await conn.execute(text("SELECT 1"))
+        logger.info("Database: connected successfully")
+    except Exception as e:
+        logger.error(f"Database: connection failed - {e}")
+        logger.warning("API will run without database persistence")
 
 
 # Shutdown event
@@ -136,3 +169,7 @@ async def shutdown_event():
 
     # Close Redis connection
     await redis_service.disconnect()
+
+    # Close database connection
+    await engine.dispose()
+    logger.info("Database: connection closed")
