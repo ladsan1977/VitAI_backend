@@ -6,12 +6,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.security import verify_api_key
+from app.db.session import get_db
 from app.main import app
 from app.models.ai import (
     AIAnalysisResponse,
-    CalificacionGeneral,
-    ClasificacionProducto,
+    GeneralRating,
     NutritionalEvaluation,
+    ProductClassification,
     ProductInfo,
 )
 
@@ -21,11 +22,19 @@ def override_verify_api_key():
     return "test_api_key"
 
 
+async def override_get_db():
+    """Override database dependency with a mock async session."""
+    session = AsyncMock()
+    yield session
+
+
 @pytest.fixture
 def client():
     """Create a test client with dependency overrides."""
     # Override the API key verification dependency
     app.dependency_overrides[verify_api_key] = override_verify_api_key
+    # Override database session to avoid real DB connections
+    app.dependency_overrides[get_db] = override_get_db
 
     # Create test client
     test_client = TestClient(app)
@@ -37,13 +46,11 @@ def client():
 
 
 @pytest.fixture
-def mock_openai_service():
-    """Mock the OpenAI service to avoid real API calls during tests."""
-
-    # Create a mock response that matches AIAnalysisResponse structure
-    mock_response = AIAnalysisResponse(
+def mock_analysis_response():
+    """Create a mock AIAnalysisResponse matching the current model structure."""
+    return AIAnalysisResponse(
         analysis_id="test-analysis-123",
-        producto=ProductInfo(
+        product=ProductInfo(
             nombre="Test Product",
             marca="Test Brand",
             tamano_porcion="100g",
@@ -51,12 +58,12 @@ def mock_openai_service():
         ),
         ingredientes=["ingredient1", "ingredient2", "ingredient3"],
         alergenos_identificados=["gluten", "soy"],
-        clasificacion_producto=ClasificacionProducto(
+        clasificacion_producto=ProductClassification(
             nivel_procesamiento="NOVA 3",
             categoria_alimento="Snacks",
             categoria_riesgo="moderado",
         ),
-        calificacion_general=CalificacionGeneral(
+        calificacion_general=GeneralRating(
             puntuacion=6.5,
             categoria_producto="Snacks",
             nivel_procesamiento="NOVA 3",
@@ -74,10 +81,13 @@ def mock_openai_service():
         success=True,
     )
 
-    # Patch the OpenAI service analyze_nutrition_images method
+
+@pytest.fixture
+def mock_controller(mock_analysis_response):
+    """Mock the AnalysisController.analyze_product method."""
     with patch(
-        "app.services.openai_service.OpenAIService.analyze_nutrition_images",
+        "app.api.v1.ai.analysis_controller.analyze_product",
         new_callable=AsyncMock,
     ) as mock:
-        mock.return_value = mock_response
+        mock.return_value = mock_analysis_response
         yield mock

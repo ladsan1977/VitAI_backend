@@ -4,8 +4,10 @@ import json
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...config import settings
+from ...controllers.analysis_controller import AnalysisController
 from ...core.exceptions import (
     AnalysisValidationError,
     ImageProcessingError,
@@ -15,6 +17,7 @@ from ...core.exceptions import (
 )
 from ...core.rate_limit import limiter
 from ...core.security import verify_api_key
+from ...db.session import get_db
 from ...models.ai import AIAnalysisResponse
 from ...services.image_service import ImageService
 from ...services.openai_service import OpenAIService
@@ -27,10 +30,17 @@ router = APIRouter(prefix="/ai", tags=["AI Analysis"])
 openai_service = OpenAIService()
 image_service = ImageService()
 
+# Initialize controller
+analysis_controller = AnalysisController(
+    openai_service=openai_service,
+    image_service=image_service,
+)
+
 
 @router.post(
     "/analyze",
     response_model=AIAnalysisResponse,
+    response_model_by_alias=False,
     status_code=status.HTTP_200_OK,
     summary="Analyze nutrition information from product images",
     description=f"""
@@ -70,6 +80,7 @@ async def analyze_nutrition(
         list[UploadFile],
         File(description="Product images (nutrition facts, ingredients, packaging). JPEG, PNG, or WebP format."),
     ],
+    db: Annotated[AsyncSession, Depends(get_db)],
     analysis_type: Annotated[
         str | None, Form(description="Type of analysis: 'nutrition', 'ingredients', or 'complete'")
     ] = "complete",
@@ -82,6 +93,9 @@ async def analyze_nutrition(
     health_conditions: Annotated[
         str | None, Form(description="Comma-separated health conditions for personalized recommendations")
     ] = None,
+    content_language: Annotated[
+        str | None, Form(description="Language for AI-generated content: 'es' (Spanish) or 'en' (English)")
+    ] = "es",
 ) -> AIAnalysisResponse:
     """Analyze nutrition information from product images."""
 
@@ -117,13 +131,16 @@ async def analyze_nutrition(
         # Process images
         processed_images = await image_service.process_multiple_files(images)
 
-        # Perform AI analysis
-        analysis_result = await openai_service.analyze_nutrition_images(
+        # Call controller for business logic orchestration
+        analysis_result = await analysis_controller.analyze_product(
+            request=request,
             images=processed_images,
             analysis_type=validated_data.get("analysis_type", "complete"),
             user_profile=user_profile_dict,
             dietary_preferences=validated_data.get("dietary_preferences"),
             health_conditions=validated_data.get("health_conditions"),
+            db=db,
+            content_language=content_language or "es",
         )
 
         return analysis_result
