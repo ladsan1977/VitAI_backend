@@ -2,12 +2,17 @@ services:
   - type: web
     name: vitai-backend
     env: docker
-    region: oregon  # Choose: oregon, frankfurt, singapore
-    plan: free  # Free tier with 750 hours/month
+    region: oregon
+    plan: free
     dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /health
+
+    # Add build command to run migrations
+    buildCommand: alembic upgrade head
+
     envVars:
+      # Application Settings
       - key: APP_ENV
         value: production
       - key: LOG_LEVEL
@@ -16,14 +21,78 @@ services:
         value: true
       - key: ALLOWED_HOSTS
         value: '["*.onrender.com"]'
+
+      # Rate Limiting
+      - key: RATE_LIMIT_ENABLED
+        value: true
       - key: RATE_LIMIT_PER_MINUTE
-        value: "10"
+        value: "20"
       - key: RATE_LIMIT_PER_HOUR
         value: "100"
-      # Secrets - Set these manually in Render dashboard
-      - key: OPEN_AI_KEY
-        sync: false  # Must be set in Render dashboard
+
+      # Database Configuration (Supabase)
+      - key: DATABASE_URL
+        sync: false  # Set in Render dashboard with Supabase URL
+      - key: DATABASE_POOL_SIZE
+        value: "10"
+      - key: DATABASE_MAX_OVERFLOW
+        value: "20"
+      - key: DATABASE_POOL_RECYCLE
+        value: "3600"
+
+      # Redis Configuration
+      - key: REDIS_URL
+        sync: false  # Set in Render dashboard
+      - key: REDIS_CACHE_TTL
+        value: "3600"
+
+      # AI Configuration
+      - key: OPENAI_MODEL
+        value: "gpt-4o-2024-11-20"
+      - key: MAX_TOKENS
+        value: "4000"
+
+      # File Upload Settings
+      - key: MAX_FILE_SIZE_MB
+        value: "10"
+      - key: ALLOWED_EXTENSIONS
+        value: '["jpg", "jpeg", "png", "webp"]'
+
+      # Secrets - Set manually in Render dashboard
+      - key: OPENAI_API_KEY
+        sync: false
       - key: API_KEY
-        sync: false  # Must be set in Render dashboard
+        sync: false
       - key: CORS_ORIGINS
-        sync: false  # Must be set in Render dashboard with frontend domain
+        sync: false
+
+
+# services:
+#   - type: web
+#     name: vitai-backend
+#     env: docker
+#     region: oregon  # Choose: oregon, frankfurt, singapore
+#     plan: free  # Free tier with 750 hours/month
+#     dockerfilePath: ./Dockerfile
+#     dockerContext: .
+#     healthCheckPath: /health
+#     envVars:
+#       - key: APP_ENV
+#         value: production
+#       - key: LOG_LEVEL
+#         value: INFO
+#       - key: HTTPS_ONLY
+#         value: true
+#       - key: ALLOWED_HOSTS
+#         value: '["*.onrender.com"]'
+#       - key: RATE_LIMIT_PER_MINUTE
+#         value: "10"
+#       - key: RATE_LIMIT_PER_HOUR
+#         value: "100"
+#       # Secrets - Set these manually in Render dashboard
+#       - key: OPEN_AI_KEY
+#         sync: false  # Must be set in Render dashboard
+#       - key: API_KEY
+#         sync: false  # Must be set in Render dashboard
+#       - key: CORS_ORIGINS
+#         sync: false  # Must be set in Render dashboard with frontend domain
