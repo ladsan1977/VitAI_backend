@@ -22,8 +22,12 @@ RUN uv sync --frozen --no-cache --no-dev
 # Copy application code
 COPY app ./app
 
+# Copy Alembic configuration and migrations
+COPY alembic.ini ./
+COPY alembic ./alembic
+
 # Expose port
 EXPOSE 8000
 
-# Run the application using uv
-CMD uv run uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
+# Run migrations then start the application
+CMD uv run alembic upgrade head && uv run uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}

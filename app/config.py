@@ -8,7 +8,22 @@ class Settings(BaseSettings):
     app_env: str = "dev"
     log_level: str = "INFO"
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:8080", "http://127.0.0.1:8080"]
-    database_url: str = "postgresql://postgres:postgres@localhost:5432/vitai"
+
+    # Database Configuration
+    database_url: str = Field(
+        default="postgresql://postgres:postgres@localhost:5432/vitai",
+        alias="DATABASE_URL",
+        description="PostgreSQL database connection URL",
+    )
+    database_pool_size: int = Field(default=5, alias="DATABASE_POOL_SIZE")
+    database_max_overflow: int = Field(default=10, alias="DATABASE_MAX_OVERFLOW")
+
+    # Analytics Configuration
+    analytics_enabled: bool = Field(default=True, alias="ANALYTICS_ENABLED")
+
+    # Prompt Configuration
+    prompt_language: str = Field(default="en", alias="PROMPT_LANGUAGE")
+
     port: int = 8000
 
     # Production security settings

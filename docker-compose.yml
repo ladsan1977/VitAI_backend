@@ -4,9 +4,9 @@ services:
     image: postgres:15-alpine
     container_name: vitai-postgres
     environment:
-      POSTGRES_DB: vitai
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-vitai}
+      POSTGRES_USER: ${POSTGRES_USER:-vitaiAdmin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
@@ -15,7 +15,7 @@ services:
     networks:
       - vitai-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d vitai"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vitaiAdmin} -d ${POSTGRES_DB:-vitai}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -43,10 +43,10 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/vitai
-      - REDIS_URL=redis://redis:6379
-      - APP_ENV=development
-      - LOG_LEVEL=INFO
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - APP_ENV=${APP_ENV:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     depends_on:
       postgres:
         condition: service_healthy
