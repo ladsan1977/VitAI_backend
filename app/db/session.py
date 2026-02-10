@@ -4,23 +4,21 @@ from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import NullPool
 
 from ..config import settings
 
 # Convert postgresql:// to postgresql+asyncpg:// for async support
 database_url = settings.database_url.replace("postgresql://", "postgresql+asyncpg://")
 
-# Create async engine with connection pooling
+# Create async engine compatible with Supabase PgBouncer (transaction mode)
+# NullPool is required because PgBouncer handles connection pooling externally
 engine = create_async_engine(
     database_url,
     echo=settings.app_env == "development",
-    pool_pre_ping=True,
-    pool_size=settings.database_pool_size,
-    max_overflow=settings.database_max_overflow,
-    pool_recycle=settings.database_pool_recycle,
-    # ADD THESE TWO LINES - Critical for Supabase PgBouncer
+    poolclass=NullPool,
     connect_args={
-        "statement_cache_size": 0,  # Disable prepared statements
+        "statement_cache_size": 0,
         "prepared_statement_cache_size": 0,
     },
 )
