@@ -12,15 +12,7 @@ from ..config import settings
 from ..core.exceptions import AnalysisValidationError, OpenAIServiceError
 from ..models.ai import (
     AIAnalysisResponse,
-    GeneralRating,
-    IdentifiedAdditives,
-    NutritionalEvaluation,
     PortionInfo,
-    ProductClassification,
-    ProductInfo,
-    ProfileRating,
-    Recommendations,
-    ScoreBreakdown,
 )
 from .redis_service import redis_service
 
@@ -319,157 +311,51 @@ class OpenAIService:
         start_time: datetime,
         token_usage: dict[str, int] | None = None,
     ) -> AIAnalysisResponse:
-        """Parse OpenAI response into AIAnalysisResponse model."""
+        """Parse OpenAI response into AIAnalysisResponse model.
+
+        Uses Pydantic's model_validate with by_alias to support both
+        Spanish keys (from prompt) and English keys transparently.
+        """
         try:
             logger.info(f"Starting to parse OpenAI response for analysis_id: {analysis_id}")
             logger.debug(f"Response data keys: {list(response_data.keys())}")
 
             processing_time = (datetime.now(UTC) - start_time).total_seconds()
 
-            # ---------- Product ----------
-            logger.debug("Parsing product...")
-            product = (
-                ProductInfo(
-                    name=response_data.get("product", {}).get("name"),
-                    brand=response_data.get("product", {}).get("brand"),
-                    serving_size=response_data.get("product", {}).get("serving_size"),
-                    servings_per_container=response_data.get("product", {}).get("servings_per_container"),
-                )
-                if "product" in response_data
-                else None
+            # Normalize nutritional_information / informacion_nutricional
+            # The prompt returns "por_porcion" but models expect "per_serving"
+            nutri_key = (
+                "informacion_nutricional" if "informacion_nutricional" in response_data else "nutritional_information"
             )
-            logger.debug(f"Product parsed: {product is not None}")
+            if nutri_key in response_data:
+                nutri_data = response_data[nutri_key]
+                # Normalize nested key: por_porcion -> per_serving
+                if "por_porcion" in nutri_data and "per_serving" not in nutri_data:
+                    nutri_data["per_serving"] = nutri_data.pop("por_porcion")
+                # Parse PortionInfo to handle string-to-float conversion
+                if "per_serving" in nutri_data:
+                    nutri_data["per_serving"] = PortionInfo(**nutri_data["per_serving"]).model_dump()
+                response_data[nutri_key] = nutri_data
 
-            # ---------- Ingredients ----------
-            logger.debug("Parsing ingredients...")
-            ingredients = response_data.get("ingredients", [])
-            logger.debug(f"Ingredients count: {len(ingredients)}")
+            # Inject metadata fields into response_data for unified parsing
+            response_data["analysis_id"] = analysis_id
+            response_data["images_processed"] = images_count
+            response_data["processing_time"] = processing_time
+            response_data["model_used"] = settings.openai_model
+            if token_usage:
+                response_data["tokens_used"] = token_usage.get("total_tokens")
+                response_data["prompt_tokens"] = token_usage.get("prompt_tokens")
+                response_data["completion_tokens"] = token_usage.get("completion_tokens")
 
-            # ---------- Identified allergens ----------
-            identified_allergens = response_data.get("identified_allergens", [])
+            # Set defaults for fields that may be missing
+            response_data.setdefault("confidence_score", 0.5)
+            response_data.setdefault("success", True)
+            response_data.setdefault("message", "Operation completed successfully")
 
-            # ---------- Identified additives ----------
-            identified_additives = None
-            if "identified_additives" in response_data:
-                adit_data = response_data["identified_additives"]
-                identified_additives = IdentifiedAdditives(
-                    sweeteners=adit_data.get("sweeteners", []),
-                    colorants=adit_data.get("colorants", []),
-                    preservatives=adit_data.get("preservatives", []),
-                    flavorings=adit_data.get("flavorings", []),
-                )
+            # Let Pydantic handle all parsing — models use populate_by_name=True
+            # so both Spanish aliases and English field names are accepted
+            response = AIAnalysisResponse.model_validate(response_data)
 
-            # ---------- Nutritional information ----------
-            nutritional_information = None
-            if "nutritional_information" in response_data:
-                serving_data = response_data["nutritional_information"].get("per_serving", {})
-                nutritional_information = {"per_serving": PortionInfo(**serving_data)}
-
-            # ---------- Product classification ----------
-            product_classification = None
-            if "product_classification" in response_data:
-                clasif_data = response_data["product_classification"]
-                product_classification = ProductClassification(
-                    processing_level=clasif_data.get("processing_level", ""),
-                    food_category=clasif_data.get("food_category"),
-                    risk_category=clasif_data.get("risk_category", ""),
-                )
-
-            # ---------- Nutritional evaluation ----------
-            nutritional_evaluation = None
-            if "nutritional_evaluation" in response_data:
-                eval_data = response_data["nutritional_evaluation"]
-                nutritional_evaluation = NutritionalEvaluation(
-                    strengths=eval_data.get("strengths", []),
-                    weaknesses=eval_data.get("weaknesses", []),
-                    warnings=eval_data.get("warnings", []),
-                    reference_comparison=eval_data.get("reference_comparison"),
-                )
-
-            # ---------- Profile ratings ----------
-            logger.debug("Parsing profile_ratings...")
-            profile_ratings = {}
-            if "profile_ratings" in response_data:
-                logger.debug(f"Found profile_ratings with profiles: {list(response_data['profile_ratings'].keys())}")
-                for profile, data in response_data["profile_ratings"].items():
-                    try:
-                        logger.debug(f"Parsing profile: {profile}")
-                        profile_ratings[profile] = ProfileRating(
-                            score=data.get("score"),
-                            recommended_frequency=data.get("recommended_frequency"),
-                            suggested_serving_size=data.get("suggested_serving_size"),
-                            justification=data.get("justification", ""),
-                        )
-                        logger.debug(f"Successfully parsed profile: {profile}")
-                    except Exception as e:
-                        logger.error(f"Error parsing profile {profile}: {str(e)}", exc_info=True)
-                        continue
-            logger.debug(f"Total profile_ratings parsed: {len(profile_ratings)}")
-
-            # ---------- General rating ----------
-            logger.debug("Parsing general_rating...")
-            general_rating = None
-            if "general_rating" in response_data:
-                gr_data = response_data["general_rating"]
-                logger.debug(f"general_rating keys: {list(gr_data.keys())}")
-
-                # Parse score_breakdown if present
-                score_breakdown = None
-                if "score_breakdown" in gr_data:
-                    logger.debug("Parsing score_breakdown...")
-                    sb_data = gr_data["score_breakdown"]
-                    score_breakdown = ScoreBreakdown(**sb_data)
-                    logger.debug("score_breakdown parsed successfully")
-
-                general_rating = GeneralRating(
-                    score=gr_data.get("score"),
-                    score_breakdown=score_breakdown,
-                    product_category=gr_data.get("product_category"),
-                    processing_level=gr_data.get("processing_level"),
-                    risk_category=gr_data.get("risk_category"),
-                    justification=gr_data.get("justification", ""),
-                )
-                logger.debug("general_rating parsed successfully")
-
-            # ---------- Recommendations ----------
-            recommendations = None
-            if "recommendations" in response_data:
-                rec_data = response_data["recommendations"]
-                recommendations = Recommendations(
-                    general_consumption=rec_data.get("general_consumption"),
-                    optimal_frequency=rec_data.get("optimal_frequency"),
-                    suggested_alternatives=rec_data.get("suggested_alternatives", []),
-                )
-
-            # ---------- Executive summary ----------
-            executive_summary = response_data.get("executive_summary")
-
-            # ---------- Confidence score ----------
-            confidence_score = float(response_data.get("confidence_score", 0.5))
-
-            # ---------- Build response ----------
-            logger.debug("Constructing AIAnalysisResponse...")
-            response = AIAnalysisResponse(
-                analysis_id=analysis_id,
-                product=product,
-                ingredients=ingredients,
-                identified_allergens=identified_allergens,
-                identified_additives=identified_additives,
-                nutritional_information=nutritional_information,
-                product_classification=product_classification,
-                general_rating=general_rating,
-                profile_ratings=profile_ratings,
-                nutritional_evaluation=nutritional_evaluation,
-                recommendations=recommendations,
-                executive_summary=executive_summary,
-                images_processed=images_count,
-                processing_time=processing_time,
-                confidence_score=confidence_score,
-                model_used=settings.openai_model,
-                tokens_used=token_usage.get("total_tokens") if token_usage else None,
-                prompt_tokens=token_usage.get("prompt_tokens") if token_usage else None,
-                completion_tokens=token_usage.get("completion_tokens") if token_usage else None,
-            )
             logger.info(f"Successfully parsed OpenAI response for analysis_id: {analysis_id}")
             return response
 
