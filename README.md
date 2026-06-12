@@ -2,22 +2,6 @@
 
 Backend API service for VitAI - AI-powered nutritional analysis application that provides personalized health recommendations based on food product labels and ingredients.
 
-## Architecture
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Nuxt 3 PWA   │◄──►│  FastAPI BE     │◄──►│  GPT-5.1 Chat   │
-│   (Frontend)    │    │  (This Repo)    │    │  Multimodal     │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-                                │
-                                ▼
-                       ┌─────────────────┐
-                       │    Supabase     │
-                       │  (PostgreSQL)   │
-                       │  via PgBouncer  │
-                       └─────────────────┘
-```
-
 ## Tech Stack
 
 - **Framework**: FastAPI (Python 3.11+)
@@ -39,6 +23,7 @@ Backend API service for VitAI - AI-powered nutritional analysis application that
 **Prerequisites**: Docker & Docker Compose, OpenAI API key
 
 1. **Clone and setup**
+
    ```bash
    git clone git@github.com:ladsan1977/VitAI_backend.git
    cd vitai-backend
@@ -46,6 +31,7 @@ Backend API service for VitAI - AI-powered nutritional analysis application that
    ```
 
 2. **Configure `.env`**
+
    ```env
    API_KEY=vitai_sk_prod_<run: python -c "import secrets; print(secrets.token_urlsafe(32))">
    OPENAI_API_KEY=your_openai_api_key_here
@@ -62,6 +48,7 @@ Backend API service for VitAI - AI-powered nutritional analysis application that
 **Prerequisites**: Python 3.11+, [UV](https://docs.astral.sh/uv/), PostgreSQL, Redis, OpenAI API key
 
 1. **Clone and setup**
+
    ```bash
    git clone git@github.com:ladsan1977/VitAI_backend.git
    cd vitai-backend
@@ -115,6 +102,7 @@ make check-all    # Run all checks (before commit)
 ```
 
 For complete development guide, see **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)**:
+
 - Local development with UV
 - Alternative setup methods
 - Pre-commit hooks
@@ -149,6 +137,7 @@ uv run pytest --cov=app
 5. Deploy!
 
 **Features:**
+
 - ✅ $0/month (free tier - 750 hours/month)
 - ✅ Auto HTTPS/SSL
 - ✅ GitHub auto-deploy
