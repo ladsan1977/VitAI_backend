@@ -12,14 +12,11 @@ Backend API service for VitAI - AI-powered nutritional analysis application that
                                 │
                                 ▼
                        ┌─────────────────┐
-                       │   PostgreSQL    │
-                       │   + Redis       │
-                       │  (Phase 2)      │
+                       │    Supabase     │
+                       │  (PostgreSQL)   │
+                       │  via PgBouncer  │
                        └─────────────────┘
 ```
-
-**Current:** Stateless API - only calls OpenAI (no database required for deployment)
-**Phase 2:** Will add PostgreSQL for data persistence and Redis for distributed caching
 
 ## Tech Stack
 
@@ -31,7 +28,8 @@ Backend API service for VitAI - AI-powered nutritional analysis application that
 - **Testing**: pytest with coverage
 - **Linting**: Ruff
 - **Deployment**: Render (free tier), Docker-ready
-- **Database**: PostgreSQL 15+ (optional - not currently used)
+- **Database**: Supabase (PostgreSQL 15+ via PgBouncer, async SQLAlchemy 2.0)
+- **Migrations**: Alembic
 - **Cache**: Redis 7+ (optional - not currently used)
 
 ## Quick Start
@@ -51,6 +49,7 @@ Backend API service for VitAI - AI-powered nutritional analysis application that
    ```env
    API_KEY=vitai_sk_prod_<run: python -c "import secrets; print(secrets.token_urlsafe(32))">
    OPENAI_API_KEY=your_openai_api_key_here
+   DATABASE_URL=postgresql://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres
    ```
 
 3. **Start**
@@ -98,9 +97,9 @@ For detailed API usage examples in different languages, see [docs/API_USAGE.md](
 
 ## Core Endpoints
 
-- `GET /health` - Health check (no auth required)
+- `GET /health` - Health check including database connectivity (no auth required)
 - `GET /api/v1/ai/health` - AI service health check (no auth required)
-- `POST /api/v1/ai/analyze` - Analyze nutrition from images (requires API key)
+- `POST /api/v1/ai/analyze` - Analyze nutrition from images, persists results (requires API key)
 
 ## Development
 
@@ -185,8 +184,15 @@ vitai-backend/
 │   ├── main.py          # FastAPI application
 │   ├── config.py        # Configuration
 │   ├── api/             # API routes
-│   ├── services/        # Business logic
+│   ├── controllers/     # Business logic
+│   ├── services/        # External integrations (OpenAI, etc.)
+│   ├── db/
+│   │   ├── session.py   # Async SQLAlchemy engine (Supabase/PgBouncer)
+│   │   ├── base.py      # Base model and TimestampMixin
+│   │   ├── models/      # ORM models (Analysis, AiConsumptionMetric, PromptVersion)
+│   │   └── repositories/# Data access layer
 │   └── utils/           # Utilities
+├── alembic/             # Database migrations
 ├── tests/               # Tests
 ├── docs/                # Documentation
 ├── docker-compose.yml   # Docker setup
