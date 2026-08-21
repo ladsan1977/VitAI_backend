@@ -9,7 +9,7 @@ async def check_usage_structure():
     client = AsyncOpenAI(api_key=os.getenv("OPEN_AI_KEY"))
 
     response = await client.responses.create(
-        model="gpt-5.1-chat-latest",
+        model="gpt-5.5",
         input=[{"role": "user", "content": [{"type": "input_text", "text": "Say hello"}]}],
         max_output_tokens=50,
         text={"format": {"type": "text"}},

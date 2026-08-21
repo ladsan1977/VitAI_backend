@@ -204,7 +204,7 @@ Pydantic models for request/response validation:
 ### Configuration (`app/config.py`)
 
 Pydantic BaseSettings for environment-based configuration:
-- OpenAI API settings (model: `gpt-5.1-chat-latest`)
+- OpenAI API settings (model: `gpt-5.5`)
 - Database settings (PostgreSQL URL, pool size, max overflow)
 - Redis settings (connection URL, cache TTL)
 - File upload constraints (10MB max, JPEG/PNG/WebP)
