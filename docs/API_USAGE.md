@@ -292,7 +292,7 @@ AI service status. No authentication required.
 {
   "status": "ok",
   "service": "AI Analysis",
-  "model": "gpt-5.1-chat-latest",
+  "model": "gpt-5.5",
   "api": "responses",
   "features": ["nutrition_extraction", "ingredient_analysis", "health_scoring"]
 }

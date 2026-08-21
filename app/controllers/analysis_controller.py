@@ -328,7 +328,8 @@ class AnalysisController:
         # Model pricing (per 1000 tokens)
         # TODO: Move to config or database for easier updates
         model_pricing = {
-            "gpt-5.1-chat-latest": {
+            # TODO: verify against current OpenAI pricing page before relying on cost totals
+            "gpt-5.5": {
                 "input": Decimal("0.00001"),  # $0.01 per 1K input tokens
                 "output": Decimal("0.00003"),  # $0.03 per 1K output tokens
             },
