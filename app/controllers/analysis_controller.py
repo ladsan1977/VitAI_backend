@@ -325,13 +325,12 @@ class AnalysisController:
         if not response.tokens_used:
             return Decimal(0)
 
-        # Model pricing (per 1000 tokens)
+        # Model pricing: price per single token (source: platform.openai.com/docs/pricing)
         # TODO: Move to config or database for easier updates
         model_pricing = {
-            # TODO: verify against current OpenAI pricing page before relying on cost totals
-            "gpt-5.5": {
-                "input": Decimal("0.00001"),  # $0.01 per 1K input tokens
-                "output": Decimal("0.00003"),  # $0.03 per 1K output tokens
+            "gpt-5-mini": {
+                "input": Decimal("0.00000025"),  # $0.25 per 1M input tokens
+                "output": Decimal("0.000002"),  # $2.00 per 1M output tokens
             },
             "gpt-4o": {
                 "input": Decimal("0.0000025"),

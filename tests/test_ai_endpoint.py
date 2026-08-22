@@ -22,7 +22,7 @@ def test_ai_health_check(client):
     data = response.json()
     assert data["status"] == "ok"
     assert data["service"] == "AI Analysis"
-    assert data["model"] == "gpt-5.5"
+    assert data["model"] == "gpt-5-mini"
 
 
 def test_analyze_nutrition_success(client, mock_controller):

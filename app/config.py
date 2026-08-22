@@ -35,7 +35,7 @@ class Settings(BaseSettings):
 
     # OpenAI Configuration
     openai_api_key: str = Field(default="", alias="OPEN_AI_KEY")
-    openai_model: str = "gpt-5.5"
+    openai_model: str = "gpt-5-mini"
     openai_max_output_tokens: int = 8000
     openai_temperature: float = 0.1
 
